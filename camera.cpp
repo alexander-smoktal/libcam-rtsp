@@ -6,7 +6,8 @@
 
 #include <spdlog/spdlog.h>
 
-static const size_t INTERVAL = 1000;
+static const size_t FPS = 24;
+static const auto INTERVAL = std::chrono::milliseconds(1000 / FPS);
 
 Camera::Camera()
 {
@@ -85,9 +86,7 @@ Camera::~Camera()
 
 void Camera::on_frame_received(libcamera::Request *request)
 {
-    spdlog::info("Member func slot");
     auto buffer = request->buffers().begin()->second;
-
     auto buffer_data = m_dma_mapper.readBuffer(*buffer);
 
     uint8_t data[4] = {buffer_data.data[0],
@@ -96,21 +95,31 @@ void Camera::on_frame_received(libcamera::Request *request)
                        buffer_data.data[buffer_data.size - 1]};
 
     spdlog::info("Request handled w data: {:x} {:x} {:x} {:x}", data[0], data[1], data[2], data[3]);
+    m_request_pending.store(false, std::memory_order_release);
 }
 
 void Camera::worker_thread()
 {
-    for (auto counter = 0; counter < 3; counter++)
+    for (auto counter = 0; counter < 13; counter++)
     {
         m_request->reuse(libcamera::Request::ReuseBuffers);
 
-        spdlog::info("Requesting a frame");
-        if (m_camera->queueRequest(m_request.get()) != 0)
+        if (!m_request_pending)
         {
-            spdlog::warn("Failed to queue request");
+            spdlog::info("Requesting a frame");
+            if (m_camera->queueRequest(m_request.get()) != 0)
+            {
+                spdlog::warn("Failed to queue request");
+            }
+
+            m_request_pending.store(true, std::memory_order_acquire);
+        }
+        else
+        {
+            spdlog::info("Requesting is pending");
         }
 
-        auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(INTERVAL);
+        auto x = std::chrono::steady_clock::now() + INTERVAL;
         std::this_thread::sleep_until(x);
     }
 }

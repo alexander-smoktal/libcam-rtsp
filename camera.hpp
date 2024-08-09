@@ -2,6 +2,7 @@
 
 #include <thread>
 #include <memory>
+#include <atomic>
 
 #include <libcamera/camera_manager.h>
 #include <libcamera/camera.h>
@@ -29,4 +30,5 @@ private:
     std::unique_ptr<libcamera::Request> m_request = nullptr;
     std::unique_ptr<libcamera::FrameBufferAllocator> m_buffer_allocator = nullptr;
     std::thread m_worker = {};
+    std::atomic_bool m_request_pending = false;
 };
