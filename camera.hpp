@@ -3,6 +3,7 @@
 #include <thread>
 #include <memory>
 #include <atomic>
+#include <vector>
 
 #include <libcamera/camera_manager.h>
 #include <libcamera/camera.h>
@@ -21,14 +22,16 @@ public:
     ~Camera();
 
 private:
+    void allocate_buffers(libcamera::Stream *stream);
+    libcamera::Request *next_buffer();
     void on_frame_received(libcamera::Request *request);
     void worker_thread();
 
     MmapedDmaBuf m_dma_mapper = {};
-    std::shared_ptr<libcamera::Camera> m_camera = nullptr;
     std::unique_ptr<libcamera::CameraManager> m_manager = std::make_unique<libcamera::CameraManager>();
-    std::unique_ptr<libcamera::Request> m_request = nullptr;
+    std::shared_ptr<libcamera::Camera> m_camera = nullptr;
     std::unique_ptr<libcamera::FrameBufferAllocator> m_buffer_allocator = nullptr;
     std::thread m_worker = {};
-    std::atomic_bool m_request_pending = false;
+    std::vector<std::unique_ptr<libcamera::Request>> m_requests_container = {};
+    std::vector<libcamera::Request *> m_available_requests = {};
 };

@@ -23,7 +23,7 @@ Camera::Camera()
     m_camera = cameras[0];
     spdlog::info("Found camera: {}", m_camera->id());
 
-    auto config = m_camera->generateConfiguration({libcamera::StreamRole::Raw});
+    auto config = m_camera->generateConfiguration({libcamera::StreamRole::VideoRecording});
 
     if (!config)
     {
@@ -58,17 +58,7 @@ Camera::Camera()
 
     spdlog::info("Stream size: {}", stream->configuration().size.toString());
 
-    m_request = m_camera->createRequest();
-    m_buffer_allocator = std::make_unique<libcamera::FrameBufferAllocator>(m_camera);
-
-    if (int res = m_buffer_allocator->allocate(stream); res <= 0)
-    {
-        spdlog::critical("Failed to allocate frame: {}", res);
-        m_camera->release();
-        return;
-    }
-
-    m_request->addBuffer(stream, m_buffer_allocator->buffers(stream).begin()->get());
+    allocate_buffers(stream);
 
     m_camera->start();
     m_camera->requestCompleted.connect(this, &Camera::on_frame_received);
@@ -80,8 +70,45 @@ Camera::~Camera()
 {
     m_worker.join();
     m_camera->stop();
+    m_requests_container.clear();
+    m_buffer_allocator.reset();
+
     m_camera->release();
     m_camera.reset();
+}
+
+void Camera::allocate_buffers(libcamera::Stream *stream)
+{
+    m_buffer_allocator = std::make_unique<libcamera::FrameBufferAllocator>(m_camera);
+    if (int res = m_buffer_allocator->allocate(stream); res <= 0)
+    {
+        spdlog::critical("Failed to allocate frame: {}", res);
+        m_camera->release();
+        exit(1);
+    }
+    spdlog::info("Allocated {} buffers", m_buffer_allocator->buffers(stream).size());
+
+    for (auto &buffer : m_buffer_allocator->buffers(stream))
+    {
+        auto request = m_camera->createRequest();
+
+        request->addBuffer(stream, buffer.get());
+        m_available_requests.push_back(request.get());
+        m_requests_container.emplace_back(std::move(request));
+    }
+}
+
+libcamera::Request *Camera::next_buffer()
+{
+
+    if (m_available_requests.empty())
+    {
+        return nullptr;
+    }
+
+    auto result = m_available_requests.back();
+    m_available_requests.pop_back();
+    return result;
 }
 
 void Camera::on_frame_received(libcamera::Request *request)
@@ -94,29 +121,30 @@ void Camera::on_frame_received(libcamera::Request *request)
                        buffer_data.data[buffer_data.size - 2],
                        buffer_data.data[buffer_data.size - 1]};
 
-    spdlog::info("Request handled w data: {:x} {:x} {:x} {:x}", data[0], data[1], data[2], data[3]);
-    m_request_pending.store(false, std::memory_order_release);
+    spdlog::trace("Request handled w data: {:x} {:x} {:x} {:x}", data[0], data[1], data[2], data[3]);
+    m_available_requests.push_back(request);
 }
 
 void Camera::worker_thread()
 {
     for (auto counter = 0; counter < 13; counter++)
     {
-        m_request->reuse(libcamera::Request::ReuseBuffers);
+        spdlog::trace("Iter count: {}", counter);
+        auto request = next_buffer();
 
-        if (!m_request_pending)
+        if (request)
         {
-            spdlog::info("Requesting a frame");
-            if (m_camera->queueRequest(m_request.get()) != 0)
+            request->reuse(libcamera::Request::ReuseBuffers);
+
+            spdlog::trace("Requesting a frame");
+            if (m_camera->queueRequest(request) != 0)
             {
                 spdlog::warn("Failed to queue request");
             }
-
-            m_request_pending.store(true, std::memory_order_acquire);
         }
         else
         {
-            spdlog::info("Requesting is pending");
+            spdlog::trace("Requesting is pending");
         }
 
         auto x = std::chrono::steady_clock::now() + INTERVAL;

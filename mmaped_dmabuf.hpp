@@ -14,8 +14,8 @@ struct PlaneData
 
 struct MappedBufferInfo
 {
-    PlaneData data = {};
-    size_t dmabufLength = 0;
+    PlaneData data;
+    size_t dmabufLength;
 };
 
 class MmapedDmaBuf

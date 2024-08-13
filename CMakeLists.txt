@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.27)
 
-project(cam-rtsp-proto)
+project(libcam-rtsp)
 
 set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost 1.81 COMPONENTS)
 find_package(spdlog 1.10)
 
-set(TARGET_NAME cam-rtsp-proto)
+set(TARGET_NAME libcam-rtsp)
 
 add_executable(${TARGET_NAME} main.cpp camera.cpp mmaped_dmabuf.cpp)
 

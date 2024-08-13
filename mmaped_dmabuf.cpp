@@ -23,17 +23,20 @@ const PlaneData &MmapedDmaBuf::readBuffer(const libcamera::FrameBuffer &buffer)
     }
 
     auto &plane = *planes.begin();
+    auto dmabufLength = plane.offset + plane.length;
 
-    if (!m_mappings.contains(plane.fd.get()))
+    if (!m_mappings.contains(plane.fd.get()) || m_mappings[plane.fd.get()].dmabufLength != dmabufLength)
     {
         spdlog::info("New DMA mapping for {} fd", plane.fd.get());
-        auto addr = mmap(nullptr, plane.offset + plane.length, PROT_READ, MAP_SHARED, plane.fd.get(), 0);
+        auto addr = mmap(nullptr, dmabufLength, PROT_READ, MAP_SHARED, plane.fd.get(), 0);
 
         PlaneData plane_data{
             .data = (uint8_t *)addr + plane.offset,
             .size = plane.length};
 
-        m_mappings.emplace(plane.fd.get(), std::move(plane_data));
+        m_mappings.emplace(plane.fd.get(), MappedBufferInfo{
+                                               .data = std::move(plane_data),
+                                               .dmabufLength = dmabufLength});
     }
 
     return m_mappings[plane.fd.get()].data;
