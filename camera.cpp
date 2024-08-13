@@ -32,7 +32,15 @@ Camera::Camera()
     }
 
     auto stream_config = config->at(0);
-    spdlog::info("Config format {}", stream_config.pixelFormat.toString());
+    spdlog::info("Config {}", stream_config.toString());
+
+    auto pixel_format = stream_config.toString();
+    Metadata metadata{
+        .format = Metadata::formatFromString(pixel_format),
+        .width = stream_config.size.width,
+        .height = stream_config.size.height};
+
+    m_transcoder = std::make_unique<Transcoder>(metadata);
 
     if (m_camera->acquire() != 0)
     {
@@ -84,7 +92,7 @@ void Camera::allocate_buffers(libcamera::Stream *stream)
     {
         spdlog::critical("Failed to allocate frame: {}", res);
         m_camera->release();
-        exit(1);
+        throw;
     }
     spdlog::info("Allocated {} buffers", m_buffer_allocator->buffers(stream).size());
 

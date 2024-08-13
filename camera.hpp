@@ -12,6 +12,7 @@
 #include <libcamera/base/span.h>
 
 #include "mmaped_dmabuf.hpp"
+#include "transcoder.hpp"
 
 class Camera final
 {
@@ -28,7 +29,9 @@ private:
     void worker_thread();
 
     MmapedDmaBuf m_dma_mapper = {};
-    std::unique_ptr<libcamera::CameraManager> m_manager = std::make_unique<libcamera::CameraManager>();
+    std::unique_ptr<Transcoder> m_transcoder = nullptr;
+    std::unique_ptr<libcamera::CameraManager>
+        m_manager = std::make_unique<libcamera::CameraManager>();
     std::shared_ptr<libcamera::Camera> m_camera = nullptr;
     std::unique_ptr<libcamera::FrameBufferAllocator> m_buffer_allocator = nullptr;
     std::thread m_worker = {};

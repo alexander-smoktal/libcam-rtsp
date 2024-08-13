@@ -6,10 +6,29 @@ set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost 1.81 COMPONENTS)
 find_package(spdlog 1.10)
 
+find_library(LIBFMT_LIBRARIES NAMES libfmt fmt)
+
+find_package(PkgConfig)
+pkg_check_modules(LIBCAMERA REQUIRED libcamera)
+pkg_check_modules(LIBAV_CODEC REQUIRED libavcodec)
+pkg_check_modules(LIBAV_FORMAT REQUIRED libavformat)
+pkg_check_modules(LIBAV_FILTER REQUIRED libavfilter)
+pkg_check_modules(LIBAV_UTIL REQUIRED libavutil)
+
 set(TARGET_NAME libcam-rtsp)
 
-add_executable(${TARGET_NAME} main.cpp camera.cpp mmaped_dmabuf.cpp)
+add_executable(${TARGET_NAME}
+    main.cpp
+    camera.cpp
+    transcoder.cpp
+    mmaped_dmabuf.cpp)
 
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 23)
-target_include_directories(${TARGET_NAME} PRIVATE ${Boost_INCLUDE_DIRS} ${spdlog_INCLUDE_DIRS} /usr/include/libcamera/)
-target_link_libraries(${TARGET_NAME} ${Boost_LIBRARIES} ${spdlog_LIBRARIES} -lcamera -lcamera-base -lfmt)
+target_include_directories(${TARGET_NAME} PRIVATE ${Boost_INCLUDE_DIRS} ${spdlog_INCLUDE_DIRS}
+    ${LIBCAMERA_INCLUDE_DIRS} ${LIBAV_CODEC_INCLUDE_DIRS}
+    ${LIBAV_FORMAT_INCLUDE_DIRS} ${LIBAV_FILTER_INCLUDE_DIRS}
+    ${LIBAV_UTIL_INCLUDE_DIRS})
+target_link_libraries(${TARGET_NAME} ${Boost_LIBRARIES} ${spdlog_LIBRARIES}
+    ${LIBCAMERA_LIBRARIES} ${LIBFMT_LIBRARIES} ${LIBAV_CODEC_LIBRARIES}
+    ${LIBAV_FORMAT_LIBRARIES} ${LIBAV_FILTER_LIBRARIES}
+    ${LIBAV_UTIL_LIBRARIES})
