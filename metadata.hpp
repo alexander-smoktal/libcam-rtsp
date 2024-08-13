@@ -4,6 +4,11 @@
 
 #include <spdlog/spdlog.h>
 
+extern "C"
+{
+#include <libavutil/pixfmt.h>
+}
+
 enum class Format
 {
     YUV420,

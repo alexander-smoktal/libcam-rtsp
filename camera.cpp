@@ -6,7 +6,8 @@
 
 #include <spdlog/spdlog.h>
 
-static const size_t FPS = 24;
+#include "globals.hpp"
+
 static const auto INTERVAL = std::chrono::milliseconds(1000 / FPS);
 
 Camera::Camera()
