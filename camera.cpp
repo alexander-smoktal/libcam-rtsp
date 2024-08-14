@@ -109,7 +109,6 @@ void Camera::allocate_buffers(libcamera::Stream *stream)
 
 libcamera::Request *Camera::next_buffer()
 {
-
     if (m_available_requests.empty())
     {
         return nullptr;
@@ -125,12 +124,17 @@ void Camera::on_frame_received(libcamera::Request *request)
     auto buffer = request->buffers().begin()->second;
     auto buffer_data = m_dma_mapper.readBuffer(*buffer);
 
+    auto bytes_used = buffer->metadata().planes().begin()->bytesused;
+    spdlog::trace("Frame metadata bytes used: {}", bytes_used);
+
     uint8_t data[4] = {buffer_data.data[0],
                        buffer_data.data[1],
-                       buffer_data.data[buffer_data.size - 2],
-                       buffer_data.data[buffer_data.size - 1]};
+                       buffer_data.data[bytes_used - 2],
+                       buffer_data.data[bytes_used - 1]};
 
     spdlog::trace("Request handled w data: {:x} {:x} {:x} {:x}", data[0], data[1], data[2], data[3]);
+
+    m_transcoder->push_frame(buffer_data.data, bytes_used);
     m_available_requests.push_back(request);
 }
 

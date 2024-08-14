@@ -16,10 +16,15 @@ public:
     Transcoder(Metadata metadata);
     ~Transcoder();
 
+    void push_frame(uint8_t *data, size_t size);
+
 private:
     void init_decoder();
     void init_coder();
-    // static AVFrame *make_av_frame(uint8_t *data, size_t size);
+
+    AVFrame *frame_from_jpeg(uint8_t *data, size_t size);
+    static size_t find_jpeg_end(uint8_t *data, size_t size);
+
     Metadata m_metadata;
 
     const AVCodec *m_decoder = nullptr;

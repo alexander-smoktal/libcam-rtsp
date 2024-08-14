@@ -23,6 +23,20 @@ Transcoder::~Transcoder()
     avcodec_free_context(&m_decoder_context);
 }
 
+void Transcoder::push_frame(uint8_t *data, size_t size)
+{
+    AVFrame *frame = nullptr;
+    if (m_decode_parser)
+    {
+        frame = frame_from_jpeg(data, size);
+    }
+
+    if (frame)
+    {
+        av_frame_free(&frame);
+    }
+}
+
 void Transcoder::init_decoder()
 {
     if (m_metadata.format != Format::MJPEG)
@@ -44,6 +58,7 @@ void Transcoder::init_decoder()
         spdlog::critical("Failed to allocate decode parser");
         throw;
     }
+    m_decode_parser->flags |= PARSER_FLAG_COMPLETE_FRAMES;
 
     m_decoder_context = avcodec_alloc_context3(m_decoder);
 
@@ -113,4 +128,92 @@ void Transcoder::init_coder()
     }
 
     spdlog::info("Coder opened succesfully");
+}
+
+AVFrame *Transcoder::frame_from_jpeg(uint8_t *data, size_t size)
+{
+    auto jpeg_frame_size = find_jpeg_end(data, size);
+    if (jpeg_frame_size < 0)
+    {
+        spdlog::error("Failed to fix frame sequence");
+        return nullptr;
+    }
+
+    AVPacket *packet = av_packet_alloc();
+    AVFrame *result = nullptr;
+
+    auto ret = av_parser_parse2(m_decode_parser, m_decoder_context, &packet->data, &packet->size,
+                                data, jpeg_frame_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+    if (ret < 0)
+    {
+        spdlog::error("Error while parsing JPEG frame");
+
+        return nullptr;
+    }
+
+    spdlog::trace("Packet size: {}. Source size: {}. Read size: {}", packet->size, size, ret);
+
+    if (packet->size)
+    {
+        ret = avcodec_send_packet(m_decoder_context, packet);
+        if (ret < 0)
+        {
+            spdlog::error("Failed to send packet");
+            av_packet_free(&packet);
+
+            return nullptr;
+        }
+
+        result = av_frame_alloc();
+        ret = avcodec_receive_frame(m_decoder_context, result);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+        {
+            av_frame_free(&result);
+            av_packet_free(&packet);
+
+            return nullptr;
+        }
+        else if (ret < 0)
+        {
+            spdlog::error("Failed to decode packet");
+            av_frame_free(&result);
+            av_packet_free(&packet);
+
+            return nullptr;
+        }
+    }
+    else
+    {
+        spdlog::error("Empty JPEG packet");
+        av_packet_free(&packet);
+
+        return nullptr;
+    }
+
+    spdlog::debug("Frame successfully decoded");
+    av_packet_free(&packet);
+    return result;
+}
+
+// FFMPEG decoder finds frame end looking for the next frame start sequence (0xffd8),
+// not current frame end (0xffd9). It obviously expects a bunch of well-formated frames going sequentially
+// as an input. But, we have a buffer, which is padded and may even contain zeroes at the end of the data.
+// This breaks the parser. So, we find frame end ourselves and set parser flag that we send complete frames.
+size_t Transcoder::find_jpeg_end(uint8_t *data, size_t size)
+{
+    for (size_t n = size; n >= 3; n--)
+    {
+        if (n == 3)
+        {
+            return -1;
+        }
+
+        if (data[n - 1] == 0xd9 && data[n - 2] == 0xff)
+        {
+            spdlog::trace("JPEG frame true size: {}", n);
+            return n;
+        }
+    }
+
+    return -1;
 }
