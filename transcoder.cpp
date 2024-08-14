@@ -190,7 +190,7 @@ AVFrame *Transcoder::frame_from_jpeg(uint8_t *data, size_t size)
         return nullptr;
     }
 
-    spdlog::debug("Frame successfully decoded");
+    spdlog::trace("Frame successfully decoded");
     av_packet_free(&packet);
     return result;
 }
