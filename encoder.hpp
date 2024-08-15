@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdio>
+
 extern "C"
 {
 #include <libavutil/avutil.h>
@@ -16,8 +18,8 @@ public:
     Encoder(Metadata metadata);
     ~Encoder();
 
-    void push_frame(uint8_t const *data, size_t size) override;
-    void push_frame(const AVFrame &frame) override;
+    void push_frame(const uint8_t *data, size_t size, uint64_t pts_usec) override;
+    void push_frame(const AVFrame *frame) override;
 
 private:
     void init();
@@ -26,4 +28,7 @@ private:
 
     const AVCodec *m_codec = nullptr;
     AVCodecContext *m_codec_context = nullptr;
+    AVPacket *m_packet = av_packet_alloc();
+
+    FILE *f;
 };

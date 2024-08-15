@@ -97,13 +97,22 @@ void Decoder::init_scaler()
     spdlog::info("Rescaler initialized succesfully");
 }
 
-void Decoder::push_frame(uint8_t const *data, size_t size)
+void Decoder::push_frame(uint8_t const *data, size_t size, uint64_t pts_usec)
 {
+    if (data == nullptr)
+    {
+        spdlog::info("Stream EOF");
+        m_encoder->push_frame(nullptr);
+        return;
+    }
+
     if (fill_frame_from_jpeg(data, size))
     {
         if (covert_frame_format())
         {
-            m_encoder->push_frame(*m_yuv_frame);
+            m_yuv_frame->pts = pts_usec;
+            m_yuv_frame->pkt_dts = pts_usec;
+            m_encoder->push_frame(m_yuv_frame);
         }
         else
         {
@@ -116,13 +125,13 @@ void Decoder::push_frame(uint8_t const *data, size_t size)
     }
 }
 
-void Decoder::push_frame(const AVFrame &frame)
+void Decoder::push_frame(const AVFrame *frame)
 {
     spdlog::critical("Received full-featured frame into JPEG decoder. This should never happen");
     exit(1);
 }
 
-bool Decoder::fill_frame_from_jpeg(uint8_t const *data, size_t size)
+bool Decoder::fill_frame_from_jpeg(const uint8_t *data, size_t size)
 {
     auto jpeg_frame_size = find_jpeg_end(data, size);
     if (jpeg_frame_size < 0)
@@ -172,7 +181,6 @@ bool Decoder::fill_frame_from_jpeg(uint8_t const *data, size_t size)
         return false;
     }
 
-    spdlog::trace("Frame successfully decoded");
     return true;
 }
 

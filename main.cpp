@@ -4,7 +4,7 @@
 
 int main()
 {
-    spdlog::set_level(spdlog::level::trace);
+    spdlog::set_level(spdlog::level::debug);
 
     Camera{};
 }

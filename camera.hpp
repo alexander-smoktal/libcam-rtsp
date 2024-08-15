@@ -37,4 +37,7 @@ private:
     std::thread m_worker = {};
     std::vector<std::unique_ptr<libcamera::Request>> m_requests_container = {};
     std::vector<libcamera::Request *> m_available_requests = {};
+
+    uint64_t m_presentation_start_time = 0;
+    uint64_t m_seq = 0;
 };

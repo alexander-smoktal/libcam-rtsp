@@ -19,8 +19,8 @@ public:
     Decoder(Metadata metadata);
     ~Decoder();
 
-    void push_frame(uint8_t const *data, size_t size) override;
-    void push_frame(const AVFrame &frame) override;
+    void push_frame(const uint8_t *data, size_t size, uint64_t pts_usec) override;
+    void push_frame(const AVFrame *frame) override;
 
 private:
     void init();

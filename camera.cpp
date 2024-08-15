@@ -3,6 +3,8 @@
 #include <thread>
 #include <chrono>
 #include <functional>
+#include <ctime>
+#include <csignal>
 
 #include <spdlog/spdlog.h>
 
@@ -12,6 +14,12 @@
 #include "decoder.hpp"
 
 static const auto INTERVAL = std::chrono::milliseconds(1000 / FPS);
+
+std::atomic_bool s_run = true;
+void signal_handler(int signal)
+{
+    s_run = false;
+}
 
 Camera::Camera()
 {
@@ -83,6 +91,8 @@ Camera::Camera()
     m_camera->requestCompleted.connect(this, &Camera::on_frame_received);
 
     m_worker = std::thread(std::bind(&Camera::worker_thread, this));
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 }
 
 Camera::~Camera()
@@ -94,6 +104,8 @@ Camera::~Camera()
 
     m_camera->release();
     m_camera.reset();
+
+    m_sink->push_frame(nullptr, 0, 0);
 }
 
 void Camera::allocate_buffers(libcamera::Stream *stream)
@@ -132,34 +144,45 @@ libcamera::Request *Camera::next_buffer()
 void Camera::on_frame_received(libcamera::Request *request)
 {
     auto buffer = request->buffers().begin()->second;
+    auto frame_timestamp_nsec = buffer->metadata().timestamp;
+    auto sequence = buffer->metadata().sequence;
+
+    // Fixe problem with non-monotonical pts
+    if (sequence <= m_seq)
+    {
+        return;
+    }
+
+    m_seq = sequence;
+
     auto buffer_data = m_dma_mapper.readBuffer(*buffer);
 
     auto bytes_used = buffer->metadata().planes().begin()->bytesused;
-    spdlog::trace("Frame metadata bytes used: {}", bytes_used);
 
-    // uint8_t data[4] = {buffer_data.data[0],
-    //                    buffer_data.data[1],
-    //                    buffer_data.data[bytes_used - 2],
-    //                    buffer_data.data[bytes_used - 1]};
+    if (m_presentation_start_time == 0)
+    {
+        spdlog::debug("Frame start timestamp: {}", frame_timestamp_nsec);
+        m_presentation_start_time = frame_timestamp_nsec;
+    }
 
-    // spdlog::trace("Request handled w data: {:x} {:x} {:x} {:x}", data[0], data[1], data[2], data[3]);
+    uint64_t pts_usec = (frame_timestamp_nsec - m_presentation_start_time) / 1000;
 
-    m_sink->push_frame(buffer_data.data, bytes_used);
+    // spdlog::trace("Frame metadata bytes used: {}. Timestamp: {}, Seq: {}", bytes_used, pts_usec, sequence);
+
+    m_sink->push_frame(buffer_data.data, bytes_used, pts_usec);
     m_available_requests.push_back(request);
 }
 
 void Camera::worker_thread()
 {
-    for (auto counter = 0; counter < 13; counter++)
+    while (s_run)
     {
-        spdlog::trace("Iter count: {}", counter);
         auto request = next_buffer();
 
         if (request)
         {
             request->reuse(libcamera::Request::ReuseBuffers);
 
-            spdlog::trace("Requesting a frame");
             if (m_camera->queueRequest(request) != 0)
             {
                 spdlog::warn("Failed to queue request");
@@ -173,4 +196,6 @@ void Camera::worker_thread()
         auto x = std::chrono::steady_clock::now() + INTERVAL;
         std::this_thread::sleep_until(x);
     }
+
+    spdlog::info("Stopping worker service");
 }

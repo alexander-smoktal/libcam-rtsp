@@ -14,22 +14,64 @@ extern "C"
 Encoder::Encoder(Metadata metadata) : m_metadata(metadata)
 {
     init();
+
+    static const char *FILENAME = "test.mpeg";
+    f = fopen(FILENAME, "wb");
+    if (!f)
+    {
+        fprintf(stderr, "could not open %s\n", FILENAME);
+        exit(1);
+    }
 }
 
 Encoder::~Encoder()
 {
+    static uint8_t endcode[] = {0, 0, 1, 0xb7};
+
     avcodec_free_context(&m_codec_context);
+
+    fwrite(endcode, 1, sizeof(endcode), f);
+    fclose(f);
 }
 
-void Encoder::push_frame(uint8_t const *data, size_t size)
+void Encoder::push_frame(const uint8_t *data, size_t size, uint64_t pts_usec)
 {
     spdlog::trace("Received raw frame into encoder");
     return;
 }
 
-void Encoder::push_frame(const AVFrame &frame)
+void Encoder::push_frame(const AVFrame *frame)
 {
     spdlog::trace("Received full-featured frame into encoder");
+
+    auto ret = avcodec_send_frame(m_codec_context, frame);
+    if (frame && ret < 0)
+    {
+        spdlog::error("Error sending a frame for encoding");
+        throw;
+    }
+
+    if (!frame && ret == AVERROR_EOF)
+    {
+        ret = 0;
+    }
+
+    while (ret >= 0)
+    {
+        ret = avcodec_receive_packet(m_codec_context, m_packet);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            return;
+        else if (ret < 0)
+        {
+            spdlog::error("Error during encoding");
+            throw;
+        }
+
+        spdlog::trace("Encoded frame {} {}", m_packet->pts, m_packet->size);
+        fwrite(m_packet->data, 1, m_packet->size, f);
+        av_packet_unref(m_packet);
+    }
+
     return;
 }
 
@@ -38,7 +80,7 @@ void Encoder::init()
     static const char *CODEC_NAME = "h264_v4l2m2m";
 
 #if NATIVE_CODEC
-    m_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    m_codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
 #else
     m_coder = avcodec_find_encoder_by_name(CODEC_NAME);
 #endif
