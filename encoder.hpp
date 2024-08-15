@@ -11,6 +11,7 @@ extern "C"
 
 #include "metadata.hpp"
 #include "iframe_sink.hpp"
+#include "streamer.hpp"
 
 class Encoder final : public IFrameSink
 {
@@ -29,6 +30,7 @@ private:
     const AVCodec *m_codec = nullptr;
     AVCodecContext *m_codec_context = nullptr;
     AVPacket *m_packet = av_packet_alloc();
+    std::unique_ptr<Streamer> m_streamer;
 
-    FILE *f;
+    // FILE *f;
 };

@@ -23,7 +23,8 @@ add_executable(${TARGET_NAME}
     camera.cpp
     decoder.cpp
     encoder.cpp
-    mmaped_dmabuf.cpp)
+    mmaped_dmabuf.cpp
+    streamer.cpp)
 
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 23)
 

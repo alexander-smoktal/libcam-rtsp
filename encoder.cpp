@@ -16,12 +16,12 @@ Encoder::Encoder(Metadata metadata) : m_metadata(metadata)
     init();
 
     static const char *FILENAME = "test.mpeg";
-    f = fopen(FILENAME, "wb");
-    if (!f)
-    {
-        fprintf(stderr, "could not open %s\n", FILENAME);
-        exit(1);
-    }
+    // f = fopen(FILENAME, "wb");
+    // if (!f)
+    // {
+    //     fprintf(stderr, "could not open %s\n", FILENAME);
+    //     exit(1);
+    // }
 }
 
 Encoder::~Encoder()
@@ -30,8 +30,8 @@ Encoder::~Encoder()
 
     avcodec_free_context(&m_codec_context);
 
-    fwrite(endcode, 1, sizeof(endcode), f);
-    fclose(f);
+    // fwrite(endcode, 1, sizeof(endcode), f);
+    // fclose(f);
 }
 
 void Encoder::push_frame(const uint8_t *data, size_t size, uint64_t pts_usec)
@@ -68,7 +68,8 @@ void Encoder::push_frame(const AVFrame *frame)
         }
 
         spdlog::trace("Encoded frame {} {}", m_packet->pts, m_packet->size);
-        fwrite(m_packet->data, 1, m_packet->size, f);
+        m_streamer->push_packet(m_packet);
+        // fwrite(m_packet->data, 1, m_packet->size, f);
         av_packet_unref(m_packet);
     }
 
@@ -80,7 +81,8 @@ void Encoder::init()
     static const char *CODEC_NAME = "h264_v4l2m2m";
 
 #if NATIVE_CODEC
-    m_codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
+    // m_codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
+    m_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 #else
     m_coder = avcodec_find_encoder_by_name(CODEC_NAME);
 #endif
@@ -122,6 +124,8 @@ void Encoder::init()
         spdlog::critical("Failed to open coder: {}", "err2str");
         throw;
     }
+
+    m_streamer = std::make_unique<Streamer>(m_codec);
 
     spdlog::info("Coder opened succesfully");
 }
