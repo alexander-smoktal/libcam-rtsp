@@ -21,7 +21,8 @@ set(TARGET_NAME libcam-rtsp)
 add_executable(${TARGET_NAME}
     main.cpp
     camera.cpp
-    transcoder.cpp
+    decoder.cpp
+    encoder.cpp
     mmaped_dmabuf.cpp)
 
 set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 23)
