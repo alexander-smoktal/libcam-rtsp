@@ -165,9 +165,9 @@ void Camera::on_frame_received(libcamera::Request *request)
         m_presentation_start_time = frame_timestamp_nsec;
     }
 
-    uint64_t pts_usec = (frame_timestamp_nsec - m_presentation_start_time) / 1000;
+    uint64_t pts_usec = (frame_timestamp_nsec - m_presentation_start_time) / 1000000;
 
-    // spdlog::trace("Frame metadata bytes used: {}. Timestamp: {}, Seq: {}", bytes_used, pts_usec, sequence);
+    spdlog::trace("Frame metadata bytes used: {}. Timestamp: {}, Seq: {}", bytes_used, pts_usec, sequence);
 
     m_sink->push_frame(buffer_data.data, bytes_used, pts_usec);
     m_available_requests.push_back(request);

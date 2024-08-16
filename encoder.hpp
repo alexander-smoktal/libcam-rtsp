@@ -32,5 +32,5 @@ private:
     AVPacket *m_packet = av_packet_alloc();
     std::unique_ptr<Streamer> m_streamer;
 
-    // FILE *f;
+    FILE *f;
 };

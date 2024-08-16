@@ -87,6 +87,7 @@ void Decoder::init_scaler()
     m_yuv_frame->format = ENCODER_SRC_FORMAT;
     m_yuv_frame->width = m_metadata.width;
     m_yuv_frame->height = m_metadata.height;
+
     /* allocate the buffers for the frame data */
     if (av_frame_get_buffer(m_yuv_frame, 32) < 0)
     {

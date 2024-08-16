@@ -3,10 +3,7 @@
 extern "C"
 {
 #include <libavcodec/avcodec.h>
-// #include <libavformat/avformat.h>
-// #include <libavutil/timestamp.h>
 #include <libavutil/opt.h>
-    // #include <libavutil/pixdesc.h>
 }
 
 #include "globals.hpp"
@@ -16,12 +13,12 @@ Encoder::Encoder(Metadata metadata) : m_metadata(metadata)
     init();
 
     static const char *FILENAME = "test.mpeg";
-    // f = fopen(FILENAME, "wb");
-    // if (!f)
-    // {
-    //     fprintf(stderr, "could not open %s\n", FILENAME);
-    //     exit(1);
-    // }
+    f = fopen(FILENAME, "wb");
+    if (!f)
+    {
+        fprintf(stderr, "could not open %s\n", FILENAME);
+        exit(1);
+    }
 }
 
 Encoder::~Encoder()
@@ -30,8 +27,8 @@ Encoder::~Encoder()
 
     avcodec_free_context(&m_codec_context);
 
-    // fwrite(endcode, 1, sizeof(endcode), f);
-    // fclose(f);
+    fwrite(endcode, 1, sizeof(endcode), f);
+    fclose(f);
 }
 
 void Encoder::push_frame(const uint8_t *data, size_t size, uint64_t pts_usec)
@@ -67,10 +64,14 @@ void Encoder::push_frame(const AVFrame *frame)
             throw;
         }
 
-        spdlog::trace("Encoded frame {} {}", m_packet->pts, m_packet->size);
-        m_streamer->push_packet(m_packet);
+        m_packet->pts = frame->pts;
+        m_packet->dts = frame->pts;
+        m_packet->stream_index = 0;
+
+        spdlog::trace("Encoded frame {} {}. Data: {}, Stream index: {}", m_packet->pts, m_packet->size,
+                      (void *)m_packet->data, m_packet->stream_index);
         // fwrite(m_packet->data, 1, m_packet->size, f);
-        av_packet_unref(m_packet);
+        m_streamer->push_packet(m_packet);
     }
 
     return;
@@ -84,7 +85,7 @@ void Encoder::init()
     // m_codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
     m_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 #else
-    m_coder = avcodec_find_encoder_by_name(CODEC_NAME);
+    m_codec = avcodec_find_encoder_by_name(CODEC_NAME);
 #endif
 
     if (!m_codec)
@@ -101,11 +102,12 @@ void Encoder::init()
         throw;
     }
 
-    m_codec_context->bit_rate = 4096000;
+    m_codec_context->bit_rate = 1024000;
     m_codec_context->width = m_metadata.width;
     m_codec_context->height = m_metadata.height;
     m_codec_context->time_base = (AVRational){1, FPS};
     m_codec_context->framerate = (AVRational){FPS, 1};
+    m_codec_context->ticks_per_frame = 2;
 
     /* emit one intra frame every ten frames
      * check frame pict_type before passing frame
@@ -114,9 +116,9 @@ void Encoder::init()
      * will always be I frame irrespective to gop_size
      */
     m_codec_context->gop_size = 10;
-    m_codec_context->max_b_frames = 1;
+    m_codec_context->max_b_frames = 4;
     m_codec_context->pix_fmt = ENCODER_SRC_FORMAT;
-    // av_opt_set(m_codec_context->priv_data, "preset", "slow", 0);
+    av_opt_set(m_codec_context->priv_data, "preset", "fast", 0);
 
     auto ret = avcodec_open2(m_codec_context, m_codec, nullptr);
     if (ret < 0)
@@ -125,7 +127,16 @@ void Encoder::init()
         throw;
     }
 
-    m_streamer = std::make_unique<Streamer>(m_codec);
+    spdlog::info("Codec delay: {}", m_codec_context->delay);
+
+    AVCodecParameters codec_params = {};
+    if (avcodec_parameters_from_context(&codec_params, m_codec_context) < 0)
+    {
+        spdlog::critical("Failed to get codec params");
+        throw;
+    }
+
+    m_streamer = std::make_unique<Streamer>(&codec_params);
 
     spdlog::info("Coder opened succesfully");
 }
